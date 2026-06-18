@@ -120,13 +120,16 @@ export function validateJobInputs(job, filaments) {
 }
 
 export function generateMarkupSuggestions(grandTotalCostZar) {
+  const markupPercents = [...Array.from({ length: 10 }, (_, index) => (index + 1) * 10), 125, 150, 175, 200, 225, 250];
   const suggestions = [];
-  for (let markup = 10; markup <= 100; markup += 10) {
+  for (const markup of markupPercents) {
     const suggestedTotalPriceZar = grandTotalCostZar * (1 + markup / 100);
+    const profitZar = suggestedTotalPriceZar - grandTotalCostZar;
     suggestions.push({
       markupPercent: markup,
       suggestedTotalPriceZar,
-      profitZar: suggestedTotalPriceZar - grandTotalCostZar
+      profitZar,
+      marginPercent: suggestedTotalPriceZar > 0 ? (profitZar / suggestedTotalPriceZar) * 100 : 0
     });
   }
   return suggestions;
@@ -235,7 +238,13 @@ export function createWorkedExampleCheck() {
       roundTo(result.rows[0].allocatedMachineCostZar, 2) === 44.44 &&
       roundTo(result.rows[1].allocatedMachineCostZar, 2) === 55.56 &&
       roundTo(result.suggestions[0].suggestedTotalPriceZar, 2) === 142.67 &&
-      roundTo(result.suggestions[9].suggestedTotalPriceZar, 2) === 259.4,
+      roundTo(result.suggestions[9].suggestedTotalPriceZar, 2) === 259.4 &&
+      result.suggestions.map((suggestion) => suggestion.markupPercent).join(",") === "10,20,30,40,50,60,70,80,90,100,125,150,175,200,225,250" &&
+      roundTo(result.suggestions[0].profitZar, 2) === 12.97 &&
+      roundTo(result.suggestions[0].marginPercent, 2) === 9.09 &&
+      roundTo(result.suggestions[15].suggestedTotalPriceZar, 2) === 453.95 &&
+      roundTo(result.suggestions[15].profitZar, 2) === 324.25 &&
+      roundTo(result.suggestions[15].marginPercent, 2) === 71.43,
     result
   };
 }

@@ -1,6 +1,6 @@
 import { Alert, Card, Grid, Paper, ScrollArea, Stack, Table, Text, Title } from "@mantine/core";
 import { IconAlertCircle } from "@tabler/icons-react";
-import { formatCurrency, formatWeight } from "../utils/formatters.js";
+import { formatCurrency, formatPercent, formatWeight } from "../utils/formatters.js";
 
 export function ResultsPanel({ calculations }) {
   const validation = calculations?.validation;
@@ -111,13 +111,14 @@ export function ResultsPanel({ calculations }) {
 
             <Stack gap="sm">
               <Title order={4}>Selling Suggestions</Title>
-              <ScrollArea>
-                <Table striped highlightOnHover withTableBorder>
+              <ScrollArea className="suggestions-table-scroll">
+                <Table striped highlightOnHover withTableBorder className="suggestions-table">
                   <Table.Thead>
                     <Table.Tr>
                       <Table.Th>Markup</Table.Th>
                       <Table.Th>Suggested Price</Table.Th>
                       <Table.Th>Profit</Table.Th>
+                      <Table.Th>Margin %</Table.Th>
                     </Table.Tr>
                   </Table.Thead>
                   <Table.Tbody>
@@ -126,6 +127,7 @@ export function ResultsPanel({ calculations }) {
                         <Table.Td>{suggestion.markupPercent}%</Table.Td>
                         <Table.Td>{formatCurrency(suggestion.suggestedTotalPriceZar)}</Table.Td>
                         <Table.Td>{formatCurrency(suggestion.profitZar)}</Table.Td>
+                        <Table.Td>{formatPercent(suggestion.marginPercent)}</Table.Td>
                       </Table.Tr>
                     ))}
                   </Table.Tbody>

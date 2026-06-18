@@ -10,3 +10,7 @@ export function formatCurrency(value) {
 export function formatWeight(value) {
   return `${Number(value || 0).toFixed(2)} g`;
 }
+
+export function formatPercent(value) {
+  return `${Number(value || 0).toFixed(2)}%`;
+}

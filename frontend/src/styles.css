@@ -29,8 +29,14 @@ body {
 
 .rail-surface,
 .compact-filament-table,
-.results-table {
+.results-table,
+.suggestions-table-scroll,
+.suggestions-table {
   min-width: 0;
+}
+
+.suggestions-table {
+  min-width: 34rem;
 }
 
 .mantine-AppShell-main {

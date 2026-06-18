@@ -119,7 +119,19 @@ async function main() {
     });
     assert.equal(result.ok, true);
     assert.equal(roundTo(result.json.calculations.grandTotalCostZar, 2), 129.7);
+    assert.deepEqual(
+      result.json.calculations.suggestions.map((suggestion) => suggestion.markupPercent),
+      [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 225, 250]
+    );
     assert.equal(roundTo(result.json.calculations.suggestions[0].suggestedTotalPriceZar, 2), 142.67);
+    assert.equal(roundTo(result.json.calculations.suggestions[0].profitZar, 2), 12.97);
+    assert.equal(roundTo(result.json.calculations.suggestions[0].marginPercent, 2), 9.09);
+    assert.equal(roundTo(result.json.calculations.suggestions[9].suggestedTotalPriceZar, 2), 259.4);
+    assert.equal(roundTo(result.json.calculations.suggestions[9].profitZar, 2), 129.7);
+    assert.equal(roundTo(result.json.calculations.suggestions[9].marginPercent, 2), 50);
+    assert.equal(roundTo(result.json.calculations.suggestions[15].suggestedTotalPriceZar, 2), 453.95);
+    assert.equal(roundTo(result.json.calculations.suggestions[15].profitZar, 2), 324.25);
+    assert.equal(roundTo(result.json.calculations.suggestions[15].marginPercent, 2), 71.43);
 
     result = await requestJson(`${baseUrl}/app-state/export`);
     assert.equal(result.ok, true);

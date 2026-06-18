@@ -288,7 +288,6 @@ export function App() {
         <AppShell.Main>
           <Grid gutter="lg" align="flex-start">
             <Grid.Col span={{ base: 12, md: 4, xl: 3 }}>
-              <FilamentPanel filaments={filaments} onSave={handleSaveFilament} onDelete={handleDeleteFilament} />
               <FilamentPanel filaments={filaments} onSave={handleSaveFilament} onRequestDelete={requestDeleteFilament} />
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 8, xl: 9 }}>
