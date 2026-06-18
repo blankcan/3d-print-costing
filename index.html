@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Print Costing</title>
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Local-first costing</p>
+        <h1>3D Print Costing</h1>
+        <p class="subtitle">Quick job pricing in South African Rand using saved filament pricing and shared machine time.</p>
+      </div>
+      <div class="header-actions">
+        <button type="button" id="export-button" class="secondary-button">Export JSON</button>
+        <label class="secondary-button import-button" for="import-input">Import JSON</label>
+        <input type="file" id="import-input" accept="application/json">
+        <button type="button" id="reset-job-button" class="ghost-button">New Job</button>
+      </div>
+    </header>
+
+    <div id="app-message" class="app-message" role="status" aria-live="polite"></div>
+
+    <main class="app-grid">
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="panel-kicker">Catalog</p>
+            <h2>Filament Management</h2>
+          </div>
+        </div>
+
+        <form id="filament-form" class="stack-form" novalidate>
+          <input type="hidden" id="filament-id">
+          <div class="field-grid two-up">
+            <label>
+              <span>Name</span>
+              <input type="text" id="filament-name" maxlength="80" placeholder="PLA Black Budget">
+            </label>
+            <label>
+              <span>Material Type</span>
+              <input type="text" id="filament-material-type" maxlength="40" placeholder="PLA">
+            </label>
+            <label>
+              <span>Brand</span>
+              <input type="text" id="filament-brand" maxlength="60" placeholder="Generic">
+            </label>
+            <label>
+              <span>Color</span>
+              <input type="text" id="filament-color" maxlength="40" placeholder="Black">
+            </label>
+            <label>
+              <span>Cost Per Kg (R)</span>
+              <input type="number" id="filament-cost" min="0" step="0.01" placeholder="289.99">
+            </label>
+          </div>
+          <label>
+            <span>Notes</span>
+            <textarea id="filament-notes" rows="3" maxlength="240" placeholder="Optional supplier or spool notes"></textarea>
+          </label>
+          <div id="filament-form-errors" class="inline-errors" role="alert"></div>
+          <div class="form-actions">
+            <button type="submit" class="primary-button">Save Filament</button>
+            <button type="button" id="filament-cancel-button" class="ghost-button" hidden>Cancel Edit</button>
+          </div>
+        </form>
+
+        <div class="table-wrap">
+          <table class="data-table" id="filament-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Material</th>
+                <th>Brand</th>
+                <th>Color</th>
+                <th>Cost / Kg</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="filament-table-body"></tbody>
+          </table>
+        </div>
+        <div id="filament-empty-state" class="empty-state">No saved filaments yet. Add one to unlock costing rows.</div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="panel-kicker">Job Builder</p>
+            <h2>Current Costing Job</h2>
+          </div>
+          <div class="job-picker">
+            <label>
+              <span>Saved Jobs</span>
+              <select id="job-selector"></select>
+            </label>
+          </div>
+        </div>
+
+        <form id="job-form" class="stack-form" novalidate>
+          <div class="field-grid two-up">
+            <label class="span-two">
+              <span>Job Name</span>
+              <input type="text" id="job-name" maxlength="120" placeholder="Bracket Batch">
+            </label>
+            <label>
+              <span>Waste Factor (%)</span>
+              <input type="number" id="job-waste-factor" min="0" step="0.01" placeholder="12">
+            </label>
+            <label>
+              <span>Machine Rate / Hour (R)</span>
+              <input type="number" id="job-machine-rate" min="0" step="0.01" placeholder="45">
+            </label>
+            <label>
+              <span>Print Time Hours</span>
+              <input type="number" id="job-time-hours" min="0" step="1" placeholder="6">
+            </label>
+            <label>
+              <span>Print Time Minutes</span>
+              <input type="number" id="job-time-minutes" min="0" step="1" placeholder="30">
+            </label>
+          </div>
+          <div id="job-form-errors" class="inline-errors" role="alert"></div>
+        </form>
+
+        <div class="part-rows-header">
+          <h3>Part Rows</h3>
+          <button type="button" id="add-part-button" class="secondary-button">Add Part Row</button>
+        </div>
+        <div id="parts-empty-state" class="empty-state">No part rows yet. Add at least one row to start costing this job.</div>
+        <div id="part-rows" class="part-rows"></div>
+      </section>
+
+      <section class="panel panel-results">
+        <div class="panel-header">
+          <div>
+            <p class="panel-kicker">Results</p>
+            <h2>Cost Breakdown</h2>
+          </div>
+        </div>
+
+        <div id="results-validation" class="inline-errors" role="alert"></div>
+
+        <div class="summary-grid">
+          <article class="summary-card">
+            <span>Total Material Cost</span>
+            <strong id="summary-material-cost">R0.00</strong>
+          </article>
+          <article class="summary-card">
+            <span>Total Machine Cost</span>
+            <strong id="summary-machine-cost">R0.00</strong>
+          </article>
+          <article class="summary-card">
+            <span>Grand Total</span>
+            <strong id="summary-grand-total">R0.00</strong>
+          </article>
+          <article class="summary-card">
+            <span>Adjusted Weight</span>
+            <strong id="summary-adjusted-weight">0 g</strong>
+          </article>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table" id="breakdown-table">
+            <thead>
+              <tr>
+                <th>Part</th>
+                <th>Filament</th>
+                <th>Qty</th>
+                <th>Base Weight</th>
+                <th>Adjusted Weight</th>
+                <th>Material Cost</th>
+                <th>Machine Cost</th>
+                <th>Line Total</th>
+                <th>Cost / Part</th>
+              </tr>
+            </thead>
+            <tbody id="breakdown-table-body"></tbody>
+          </table>
+        </div>
+        <div id="breakdown-empty-state" class="empty-state">Enter valid job and part inputs to see the breakdown.</div>
+
+        <div class="table-wrap">
+          <table class="data-table compact-table" id="suggestions-table">
+            <thead>
+              <tr>
+                <th>Markup</th>
+                <th>Suggested Price</th>
+                <th>Profit</th>
+              </tr>
+            </thead>
+            <tbody id="suggestions-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="scripts/state.js"></script>
+  <script src="scripts/persistence.js"></script>
+  <script src="scripts/calculations.js"></script>
+  <script src="scripts/ui.js"></script>
+  <script src="scripts/app.js"></script>
+</body>
+</html>

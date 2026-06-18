@@ -1,0 +1,50 @@
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top right, rgba(90, 159, 99, 0.12), transparent 22rem),
+    linear-gradient(180deg, #fbf8f1 0%, #f2ede4 100%);
+}
+
+.app-shell {
+  max-width: 1900px;
+  margin: 0 auto;
+}
+
+.app-header-shell {
+  position: static;
+  background: transparent;
+  border: 0;
+}
+
+.app-header-box,
+.loading-screen {
+  padding: 1.25rem;
+}
+
+.rail-surface,
+.compact-filament-table,
+.results-table {
+  min-width: 0;
+}
+
+.mantine-AppShell-main {
+  padding-top: 1rem;
+}
+
+.mantine-Table-th,
+.mantine-Table-td {
+  vertical-align: top;
+}
+
+@media (max-width: 62em) {
+  .app-header-box,
+  .loading-screen {
+    padding-inline: 0.875rem;
+  }
+}

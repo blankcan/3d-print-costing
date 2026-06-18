@@ -1,0 +1,15 @@
+{
+  "name": "3d-print-costing-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "verify": "node scripts/verify.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "12.11.1",
+    "cors": "^2.8.6",
+    "express": "^5.2.1"
+  }
+}
