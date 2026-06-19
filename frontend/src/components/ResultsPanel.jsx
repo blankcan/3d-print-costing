@@ -7,7 +7,7 @@ export function ResultsPanel({ calculations }) {
   const rowErrors = validation?.rowErrors || {};
   const validationMessages = validation?.errors ? [...validation.errors] : [];
   if (Object.keys(rowErrors).length) {
-    validationMessages.push("Complete the highlighted part rows to unlock full costing results.");
+    validationMessages.push("Valid rows still calculate below, but complete the highlighted part rows to unlock final selling suggestions.");
   }
 
   return (
@@ -71,7 +71,7 @@ export function ResultsPanel({ calculations }) {
           </Grid.Col>
         </Grid>
 
-        {calculations?.validation?.isValid ? (
+        {calculations?.rows?.length ? (
           <>
             <Stack gap="sm">
               <Title order={4}>Part Breakdown</Title>
@@ -109,31 +109,35 @@ export function ResultsPanel({ calculations }) {
               </ScrollArea>
             </Stack>
 
-            <Stack gap="sm">
-              <Title order={4}>Selling Suggestions</Title>
-              <ScrollArea className="suggestions-table-scroll">
-                <Table striped highlightOnHover withTableBorder className="suggestions-table">
-                  <Table.Thead>
-                    <Table.Tr>
-                      <Table.Th>Markup</Table.Th>
-                      <Table.Th>Suggested Price</Table.Th>
-                      <Table.Th>Profit</Table.Th>
-                      <Table.Th>Margin %</Table.Th>
-                    </Table.Tr>
-                  </Table.Thead>
-                  <Table.Tbody>
-                    {calculations.suggestions.map((suggestion) => (
-                      <Table.Tr key={suggestion.markupPercent}>
-                        <Table.Td>{suggestion.markupPercent}%</Table.Td>
-                        <Table.Td>{formatCurrency(suggestion.suggestedTotalPriceZar)}</Table.Td>
-                        <Table.Td>{formatCurrency(suggestion.profitZar)}</Table.Td>
-                        <Table.Td>{formatPercent(suggestion.marginPercent)}</Table.Td>
+            {calculations?.validation?.isComplete ? (
+              <Stack gap="sm">
+                <Title order={4}>Selling Suggestions</Title>
+                <ScrollArea className="suggestions-table-scroll">
+                  <Table striped highlightOnHover withTableBorder className="suggestions-table">
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Markup</Table.Th>
+                        <Table.Th>Suggested Price</Table.Th>
+                        <Table.Th>Profit</Table.Th>
+                        <Table.Th>Margin %</Table.Th>
                       </Table.Tr>
-                    ))}
-                  </Table.Tbody>
-                </Table>
-              </ScrollArea>
-            </Stack>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {calculations.suggestions.map((suggestion) => (
+                        <Table.Tr key={suggestion.markupPercent}>
+                          <Table.Td>{suggestion.markupPercent}%</Table.Td>
+                          <Table.Td>{formatCurrency(suggestion.suggestedTotalPriceZar)}</Table.Td>
+                          <Table.Td>{formatCurrency(suggestion.profitZar)}</Table.Td>
+                          <Table.Td>{formatPercent(suggestion.marginPercent)}</Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </ScrollArea>
+              </Stack>
+            ) : (
+              <Text c="dimmed">Selling suggestions will appear again once the full job is valid.</Text>
+            )}
           </>
         ) : (
           <Text c="dimmed">Enter valid job and part inputs to see the breakdown.</Text>

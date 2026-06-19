@@ -1,16 +1,7 @@
-import { ActionIcon, Button, FileButton, Group, Stack, Text, Title } from "@mantine/core";
-import { IconDownload, IconPlus, IconSettings2, IconUpload } from "@tabler/icons-react";
+import { ActionIcon, Button, Group, Stack, Text, Title } from "@mantine/core";
+import { IconPlus, IconSettings2 } from "@tabler/icons-react";
 
-export function AppHeader({ onExport, onImport, onCreateJob, onOpenSettings }) {
-  async function handleImport(file) {
-    if (!file) {
-      return;
-    }
-
-    const text = await file.text();
-    onImport(text);
-  }
-
+export function AppHeader({ onCreateJob, onOpenSettings }) {
   return (
     <Group justify="space-between" align="flex-start" gap="lg" wrap="wrap">
       <Stack gap={6}>
@@ -28,16 +19,6 @@ export function AppHeader({ onExport, onImport, onCreateJob, onOpenSettings }) {
         <ActionIcon variant="light" color="sage" size={44} radius="xl" onClick={onOpenSettings} aria-label="Open settings">
           <IconSettings2 size={20} />
         </ActionIcon>
-        <Button variant="default" leftSection={<IconDownload size={18} />} onClick={onExport}>
-          Export JSON
-        </Button>
-        <FileButton accept="application/json" onChange={handleImport}>
-          {(props) => (
-            <Button variant="default" leftSection={<IconUpload size={18} />} {...props}>
-              Import JSON
-            </Button>
-          )}
-        </FileButton>
         <Button color="sage" leftSection={<IconPlus size={18} />} onClick={onCreateJob}>
           New Job
         </Button>

@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "verify": "node scripts/verify.js"
+    "test": "node --test",
+    "verify": "node --test"
   },
   "dependencies": {
     "better-sqlite3": "12.11.1",

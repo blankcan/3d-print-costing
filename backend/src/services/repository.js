@@ -1,6 +1,8 @@
 import { getDatabase } from "../db/database.js";
 import { createId, nowIso } from "./ids.js";
-import { mapFilamentRow, mapJobRow } from "./serializers.js";
+import { removeStoredJobImage } from "./jobImages.js";
+import { mapCustomerRow, mapFilamentRow, mapJobRow } from "./serializers.js";
+import { normalizeBooleanFlag, normalizeJobStatus } from "../../../shared/calculations/index.js";
 
 const DEFAULT_SETTINGS = {
   defaultMachineRatePerHourZar: 0,
@@ -61,6 +63,59 @@ export function getFilamentById(id) {
   return row ? mapFilamentRow(row) : null;
 }
 
+export function listCustomers() {
+  return db()
+    .prepare("SELECT * FROM customers ORDER BY updated_at DESC, name COLLATE NOCASE ASC")
+    .all()
+    .map(mapCustomerRow);
+}
+
+export function getCustomerById(id) {
+  const row = db().prepare("SELECT * FROM customers WHERE id = ?").get(id);
+  return row ? mapCustomerRow(row) : null;
+}
+
+export function saveCustomer(input) {
+  const timestamp = nowIso();
+  const customer = {
+    id: input.id || createId("cust"),
+    name: String(input.name || "").trim(),
+    cellNumber: String(input.cellNumber || "").trim(),
+    email: String(input.email || "").trim(),
+    deliveryAddress: String(input.deliveryAddress || "").trim(),
+    createdAt: input.createdAt || timestamp,
+    updatedAt: timestamp
+  };
+
+  db().prepare(`
+    INSERT INTO customers (id, name, cell_number, email, delivery_address, created_at, updated_at)
+    VALUES (@id, @name, @cellNumber, @email, @deliveryAddress, @createdAt, @updatedAt)
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      cell_number = excluded.cell_number,
+      email = excluded.email,
+      delivery_address = excluded.delivery_address,
+      updated_at = excluded.updated_at
+  `).run(customer);
+
+  return getCustomerById(customer.id);
+}
+
+export function deleteCustomer(id) {
+  const existing = getCustomerById(id);
+  if (!existing) {
+    return false;
+  }
+
+  const transaction = db().transaction(() => {
+    db().prepare("UPDATE jobs SET customer_id = NULL, updated_at = ? WHERE customer_id = ?").run(nowIso(), id);
+    db().prepare("DELETE FROM customers WHERE id = ?").run(id);
+  });
+
+  transaction();
+  return true;
+}
+
 export function saveFilament(input) {
   const timestamp = nowIso();
   const filament = {
@@ -92,7 +147,8 @@ export function saveFilament(input) {
 }
 
 export function deleteFilament(id) {
-  db().prepare("DELETE FROM filaments WHERE id = ?").run(id);
+  const result = db().prepare("DELETE FROM filaments WHERE id = ?").run(id);
+  return result.changes > 0;
 }
 
 export function listJobs() {
@@ -108,6 +164,12 @@ export function listJobs() {
       wasteFactorPercent: row.waste_factor_percent,
       printTimeHours: row.print_time_hours,
       machineRatePerHourZar: row.machine_rate_per_hour_zar,
+      status: normalizeJobStatus(row.status),
+      paid: Boolean(row.paid),
+      delivered: Boolean(row.delivered),
+      customerId: row.customer_id || "",
+      imagePath: row.image_path || null,
+      imageFileName: row.image_file_name || null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       partsCount
@@ -161,19 +223,31 @@ export function saveJob(input) {
     wasteFactorPercent: Number(input.wasteFactorPercent ?? 0),
     printTimeHours: Number(input.printTimeHours ?? 0),
     machineRatePerHourZar: Number(input.machineRatePerHourZar ?? 0),
+    status: normalizeJobStatus(input.status),
+    paid: normalizeBooleanFlag(input.paid) ? 1 : 0,
+    delivered: normalizeBooleanFlag(input.delivered) ? 1 : 0,
+    customerId: input.customerId || null,
+    imagePath: input.imagePath || null,
+    imageFileName: input.imageFileName || null,
     createdAt: input.createdAt || timestamp,
     updatedAt: timestamp
   };
 
   const transaction = db().transaction(() => {
     db().prepare(`
-      INSERT INTO jobs (id, job_name, waste_factor_percent, print_time_hours, machine_rate_per_hour_zar, created_at, updated_at)
-      VALUES (@id, @jobName, @wasteFactorPercent, @printTimeHours, @machineRatePerHourZar, @createdAt, @updatedAt)
+      INSERT INTO jobs (id, job_name, waste_factor_percent, print_time_hours, machine_rate_per_hour_zar, status, paid, delivered, customer_id, image_path, image_file_name, created_at, updated_at)
+      VALUES (@id, @jobName, @wasteFactorPercent, @printTimeHours, @machineRatePerHourZar, @status, @paid, @delivered, @customerId, @imagePath, @imageFileName, @createdAt, @updatedAt)
       ON CONFLICT(id) DO UPDATE SET
         job_name = excluded.job_name,
         waste_factor_percent = excluded.waste_factor_percent,
         print_time_hours = excluded.print_time_hours,
         machine_rate_per_hour_zar = excluded.machine_rate_per_hour_zar,
+        status = excluded.status,
+        paid = excluded.paid,
+        delivered = excluded.delivered,
+        customer_id = excluded.customer_id,
+        image_path = excluded.image_path,
+        image_file_name = excluded.image_file_name,
         updated_at = excluded.updated_at
     `).run(job);
 
@@ -218,6 +292,9 @@ export function createEmptyJob() {
     wasteFactorPercent: settings.defaultWasteFactorPercent,
     printTimeHours: 0,
     machineRatePerHourZar: settings.defaultMachineRatePerHourZar,
+    status: "PLANNING",
+    paid: false,
+    delivered: false,
     parts: [
       {
         id: createId("part"),
@@ -232,8 +309,14 @@ export function createEmptyJob() {
 }
 
 export function deleteJob(jobId) {
+  const existingJob = db().prepare("SELECT image_path FROM jobs WHERE id = ?").get(jobId);
+  if (!existingJob) {
+    return false;
+  }
+
   const transaction = db().transaction(() => {
     db().prepare("DELETE FROM jobs WHERE id = ?").run(jobId);
+    removeStoredJobImage(existingJob.image_path || null);
     const lastOpenJobId = getLastOpenJobId();
     if (lastOpenJobId === jobId) {
       const recent = db().prepare("SELECT id FROM jobs ORDER BY updated_at DESC, created_at DESC LIMIT 1").get();
@@ -242,13 +325,15 @@ export function deleteJob(jobId) {
   });
 
   transaction();
+  return true;
 }
 
-export function replaceAllData({ filaments, jobs, lastOpenJobId, settings }) {
+export function replaceAllData({ filaments, customers, jobs, lastOpenJobId, settings }) {
   const transaction = db().transaction(() => {
     db().prepare("DELETE FROM job_parts").run();
     db().prepare("DELETE FROM jobs").run();
     db().prepare("DELETE FROM filaments").run();
+    db().prepare("DELETE FROM customers").run();
 
     for (const filament of filaments) {
       db().prepare(`
@@ -267,16 +352,37 @@ export function replaceAllData({ filaments, jobs, lastOpenJobId, settings }) {
       });
     }
 
+    for (const customer of customers || []) {
+      db().prepare(`
+        INSERT INTO customers (id, name, cell_number, email, delivery_address, created_at, updated_at)
+        VALUES (@id, @name, @cellNumber, @email, @deliveryAddress, @createdAt, @updatedAt)
+      `).run({
+        id: customer.id,
+        name: customer.name,
+        cellNumber: customer.cellNumber,
+        email: customer.email,
+        deliveryAddress: customer.deliveryAddress,
+        createdAt: customer.createdAt,
+        updatedAt: customer.updatedAt
+      });
+    }
+
     for (const job of jobs) {
       db().prepare(`
-        INSERT INTO jobs (id, job_name, waste_factor_percent, print_time_hours, machine_rate_per_hour_zar, created_at, updated_at)
-        VALUES (@id, @jobName, @wasteFactorPercent, @printTimeHours, @machineRatePerHourZar, @createdAt, @updatedAt)
+        INSERT INTO jobs (id, job_name, waste_factor_percent, print_time_hours, machine_rate_per_hour_zar, status, paid, delivered, customer_id, image_path, image_file_name, created_at, updated_at)
+        VALUES (@id, @jobName, @wasteFactorPercent, @printTimeHours, @machineRatePerHourZar, @status, @paid, @delivered, @customerId, @imagePath, @imageFileName, @createdAt, @updatedAt)
       `).run({
         id: job.id,
         jobName: job.jobName,
         wasteFactorPercent: job.wasteFactorPercent,
         printTimeHours: job.printTimeHours,
         machineRatePerHourZar: job.machineRatePerHourZar,
+        status: normalizeJobStatus(job.status),
+        paid: normalizeBooleanFlag(job.paid) ? 1 : 0,
+        delivered: normalizeBooleanFlag(job.delivered) ? 1 : 0,
+        customerId: job.customerId || null,
+        imagePath: job.imagePath || null,
+        imageFileName: job.imageFileName || null,
         createdAt: job.createdAt,
         updatedAt: job.updatedAt
       });
@@ -311,4 +417,36 @@ export function replaceAllData({ filaments, jobs, lastOpenJobId, settings }) {
   });
 
   transaction();
+}
+
+export function updateJobImage(jobId, { imagePath, imageFileName }) {
+  const result = db().prepare(`
+    UPDATE jobs
+    SET image_path = ?, image_file_name = ?, updated_at = ?
+    WHERE id = ?
+  `).run(imagePath || null, imageFileName || null, nowIso(), jobId);
+
+  if (result.changes === 0) {
+    return null;
+  }
+
+  return getJobById(jobId);
+}
+
+export function clearJobImage(jobId) {
+  const existing = db().prepare("SELECT image_path FROM jobs WHERE id = ?").get(jobId);
+  if (!existing) {
+    return null;
+  }
+
+  db().prepare(`
+    UPDATE jobs
+    SET image_path = NULL, image_file_name = NULL, updated_at = ?
+    WHERE id = ?
+  `).run(nowIso(), jobId);
+
+  return {
+    previousImagePath: existing?.image_path || null,
+    job: getJobById(jobId)
+  };
 }

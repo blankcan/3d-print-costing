@@ -1,4 +1,9 @@
 import { splitHoursAndMinutes } from "../../../shared/calculations/index.js";
+import { getJobImagePublicUrl, jobImageExists } from "./jobImages.js";
+
+function mapJobStatus(value) {
+  return ["PLANNING", "PRINTING", "COMPLETE"].includes(value) ? value : "PLANNING";
+}
 
 export function mapFilamentRow(row) {
   return {
@@ -9,6 +14,18 @@ export function mapFilamentRow(row) {
     color: row.color,
     costPerKgZar: row.cost_per_kg_zar,
     notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+export function mapCustomerRow(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    cellNumber: row.cell_number,
+    email: row.email,
+    deliveryAddress: row.delivery_address,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -29,6 +46,7 @@ export function mapPartRow(row) {
 
 export function mapJobRow(jobRow, partRows = []) {
   const timeInputs = splitHoursAndMinutes(jobRow.print_time_hours);
+  const imagePath = jobRow.image_path || null;
   return {
     id: jobRow.id,
     jobName: jobRow.job_name,
@@ -37,6 +55,14 @@ export function mapJobRow(jobRow, partRows = []) {
     printTimeInputHours: timeInputs.hours,
     printTimeInputMinutes: timeInputs.minutes,
     machineRatePerHourZar: jobRow.machine_rate_per_hour_zar,
+    status: mapJobStatus(jobRow.status),
+    paid: Boolean(jobRow.paid),
+    delivered: Boolean(jobRow.delivered),
+    customerId: jobRow.customer_id || "",
+    imagePath,
+    imageFileName: jobRow.image_file_name || null,
+    imageUrl: getJobImagePublicUrl(imagePath),
+    imageAvailable: jobImageExists(imagePath),
     parts: partRows.map(mapPartRow),
     createdAt: jobRow.created_at,
     updatedAt: jobRow.updated_at

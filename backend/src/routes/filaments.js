@@ -1,6 +1,7 @@
 import { Router } from "express";
+import { sendNotFound, sendValidationError } from "../services/apiResponses.js";
 import { deleteFilament, getFilamentById, listFilaments, saveFilament } from "../services/repository.js";
-import { getFilamentValidationErrors } from "../services/presentation.js";
+import { validateFilamentPayload } from "../services/requestValidation.js";
 
 export const filamentsRouter = Router();
 
@@ -11,16 +12,16 @@ filamentsRouter.get("/", (_request, response) => {
 filamentsRouter.get("/:id", (request, response) => {
   const filament = getFilamentById(request.params.id);
   if (!filament) {
-    response.status(404).json({ error: "Filament not found." });
+    sendNotFound(response, "Filament not found.");
     return;
   }
   response.json({ filament });
 });
 
 filamentsRouter.post("/", (request, response) => {
-  const errors = getFilamentValidationErrors(request.body);
-  if (errors.length) {
-    response.status(400).json({ error: errors.join(" ") });
+  const validation = validateFilamentPayload(request.body);
+  if (validation.errors.length) {
+    sendValidationError(response, validation.errors, validation.rowErrors);
     return;
   }
   const filament = saveFilament(request.body);
@@ -28,9 +29,14 @@ filamentsRouter.post("/", (request, response) => {
 });
 
 filamentsRouter.put("/:id", (request, response) => {
-  const errors = getFilamentValidationErrors(request.body);
-  if (errors.length) {
-    response.status(400).json({ error: errors.join(" ") });
+  if (!getFilamentById(request.params.id)) {
+    sendNotFound(response, "Filament not found.");
+    return;
+  }
+
+  const validation = validateFilamentPayload(request.body);
+  if (validation.errors.length) {
+    sendValidationError(response, validation.errors, validation.rowErrors);
     return;
   }
   const filament = saveFilament({ ...request.body, id: request.params.id });
@@ -38,6 +44,10 @@ filamentsRouter.put("/:id", (request, response) => {
 });
 
 filamentsRouter.delete("/:id", (request, response) => {
-  deleteFilament(request.params.id);
+  if (!deleteFilament(request.params.id)) {
+    sendNotFound(response, "Filament not found.");
+    return;
+  }
+
   response.status(204).send();
 });

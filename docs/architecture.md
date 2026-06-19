@@ -1,600 +1,513 @@
-# 3D Printer Costing App Architecture
+# 3D Print Costing Architecture
 
 ## Overview
 
-This document defines the v2 architecture for a local-first 3D printer costing application used to price print jobs in South African Rand (ZAR). The app is intended for a small shop or individual operator who needs stronger persistence and a more maintainable application structure than the original browser-only v1 design.
+This document describes the current architecture of the 3D Print Costing application as it is implemented today.
 
-The application is now a local full-stack system:
+The platform is a local-first, single-user application for pricing 3D print jobs in South African Rand (ZAR). It is designed for a small workshop or solo operator who needs durable local storage, reusable catalog data, and fast costing workflows without depending on cloud services.
 
-- a React frontend for the user interface
-- a Node.js + Express backend for application services and persistence
-- a local SQLite database for durable storage
+The application is implemented as:
 
-The app remains single-user and local-first. It is not designed as a hosted SaaS product or multi-user platform in v2.
+- a React single-page frontend built with Vite
+- a Mantine-based UI layer for layout, forms, tables, overlays, and theming
+- a local Node.js + Express backend API
+- a local SQLite database accessed through `better-sqlite3`
+- shared calculation and validation helpers in `shared/calculations`
 
-The primary goals of v2 are:
+SQLite is the only supported source of truth for application data. JSON import/export and legacy migration flows are not part of the current platform.
 
-- preserve the costing behavior and product rules established in v1
-- replace browser-only persistence with SQLite
-- provide a clearer separation between UI, business logic, and storage
-- retain JSON import/export for backup and interoperability
-- create a foundation that can support future local desktop packaging or later hosted expansion
+## Product Capabilities
 
-## Product Scope
+The current app supports:
 
-The product still centers on costing 3D print jobs with reusable filament pricing and multi-part job support.
+- reusable filament catalog management
+- reusable customer catalog management
+- saved costing jobs with multiple part rows
+- global defaults for Waste % and Machine Rate that apply to new jobs only
+- per-job workflow status values:
+  - `PLANNING`
+  - `PRINTING`
+  - `COMPLETE`
+- per-job fulfillment flags:
+  - `paid`
+  - `delivered`
+- optional customer assignment on jobs
+- one primary image attachment per job
+- material, machine, and total cost breakdowns
+- markup-driven selling suggestions
+- derived profit and margin output for each suggestion row
 
-The app supports:
+The current app does not depend on:
 
-- a reusable filament catalog
-- one or more saved costing jobs
-- multiple part rows per job
-- a shared waste factor per job
-- a shared machine-time input per job
-- machine-cost allocation across part rows
-- markup-based selling-price suggestions
-
-V2 focuses on durability, maintainability, and future growth of the local app. It does not yet include:
-
-- customer management
-- invoicing
-- tax or VAT workflows
-- shipping or packaging costs
-- labor or electricity costing
-- stock/inventory control
-- multi-user accounts
 - cloud sync
+- user accounts or authentication
+- remote hosting for normal use
+- browser-only persistence
 
 ## Runtime Architecture
 
 ### Frontend
 
-The frontend is a React single-page application built with Vite.
+The frontend is a React SPA served by Vite in development.
 
-Responsibilities:
+Primary frontend responsibilities:
 
-- render the full costing workflow
-- manage user interaction state
-- call backend API endpoints
-- display validation errors and calculated results
-- support JSON import/export actions through the backend
+- render the job costing workflow
+- manage local editing state and autosave orchestration
+- call backend endpoints for persisted data
+- render validation feedback and derived costing output
+- provide settings, catalog, and job-editing interactions
+
+Mantine is the UI foundation for:
+
+- app shell and layout primitives
+- forms and inputs
+- buttons and actions
+- drawer navigation
+- tables and scroll areas
+- notifications and feedback
 
 ### Backend
 
-The backend is a Node.js application using Express.
+The backend is an Express application running locally on the same machine as the frontend.
 
-Responsibilities:
+Primary backend responsibilities:
 
-- expose a local HTTP API to the frontend
-- own the canonical persistence layer
-- validate and normalize incoming data
-- run or coordinate the canonical costing calculations
-- provide import/export and migration support
+- expose the local HTTP API
+- persist application data in SQLite
+- serve stored job images
+- return bootstrap data for app startup
+- coordinate canonical calculation output using shared logic
 
-### Database
+### Database And Local File Storage
 
-The primary data store is a local SQLite database accessed through `better-sqlite3`.
+SQLite is the authoritative data store for structured records.
 
-Responsibilities:
+Local file storage is used for job images:
 
-- store filament catalog records
-- store jobs
-- store job part rows
-- retain state across restarts
-
-This architecture is designed for local use on a single machine. The backend and database are both local application components, not remote services.
-
-## Chosen Stack
-
-### Frontend stack
-
-- React
-- Vite
-- browser fetch APIs
-
-### Backend stack
-
-- Node.js
-- Express
-- `better-sqlite3`
-
-### Persistence model
-
-- SQLite as the primary source of truth
-- JSON import/export as backup and interchange
+- one primary image may be attached to a job
+- the backend stores the file on disk
+- the database stores the image reference fields
+- the backend serves the saved file through a local route
 
 ## Core Domains
 
-### 1. Filament Catalog
+### Filament Catalog
 
-The filament catalog stores reusable pricing records selected by part rows during costing.
+The filament catalog stores reusable material records used by job part rows.
 
-Each filament entry contains:
+Each filament record includes:
 
-- `id`: stable unique identifier
-- `name`: short display label
-- `materialType`: PLA, PETG, ABS, TPU, or free text
-- `brand`: manufacturer or supplier name
-- `color`: color description
-- `costPerKgZar`: numeric cost per kilogram in Rand
-- `notes`: optional free text
-- `createdAt`: timestamp
-- `updatedAt`: timestamp
+- `id`
+- `name`
+- `materialType`
+- `brand`
+- `color`
+- `costPerKgZar`
+- `notes`
+- `createdAt`
+- `updatedAt`
 
-The filament catalog remains the default source of truth for material pricing. Part rows reference saved filament records rather than duplicating price data inline.
+Filament records are selected by part rows rather than duplicating price data inline.
 
-### 2. Costing Job
+### Customer Catalog
 
-A costing job is a single pricing scenario for one print run and includes shared machine and waste inputs plus multiple part rows.
+The customer catalog stores optional customer details that can be linked to jobs.
 
-Each job contains:
+Each customer record includes:
 
-- `id`: stable unique identifier
-- `jobName`: user-defined reference
-- `wasteFactorPercent`: additional material percentage for waste, brims, purge, and setup overhead
-- `printTimeHours`: normalized time in decimal hours
-- `machineRatePerHourZar`: machine hourly rate in Rand
-- `createdAt`: timestamp
-- `updatedAt`: timestamp
+- `id`
+- `name`
+- `cellNumber`
+- `email`
+- `deliveryAddress`
+- `createdAt`
+- `updatedAt`
 
-### 3. Job Part Row
+Customer assignment is informational only and does not affect calculations.
 
-Each part row represents a line item within a job.
+### Costing Jobs
 
-Each row contains:
+A job is the main costing container for one pricing scenario.
 
-- `id`: stable unique identifier
-- `jobId`: owning job reference
-- `filamentId`: saved filament reference
-- `partName`: descriptive label
-- `weightGramsPerPart`: grams per part
-- `quantity`: quantity on the row
-- `createdAt`: timestamp
-- `updatedAt`: timestamp
+Each job includes:
 
-Derived values remain calculated at runtime rather than stored as authoritative source fields.
+- `id`
+- `jobName`
+- `wasteFactorPercent`
+- `printTimeHours`
+- `machineRatePerHourZar`
+- `status`
+- `paid`
+- `delivered`
+- `customerId`
+- `imagePath`
+- `imageFileName`
+- `createdAt`
+- `updatedAt`
 
-### 4. Calculation Engine
+Job-level defaults are copied from saved settings only when a new job is created. Existing jobs keep their own saved values unless edited directly.
 
-The calculation engine transforms persisted job inputs into totals, part-row breakdowns, and selling-price suggestions.
+### Job Part Rows
 
-Responsibilities:
+Each job contains one or more part rows.
 
-- normalize time input
-- compute row base and adjusted material weights
-- compute row material costs
-- compute total machine cost
-- allocate machine cost across rows by adjusted material-weight share
-- compute total job cost
-- generate markup-based selling-price suggestions from 10% to 100%
+Each part row includes:
 
-The costing formulas are preserved exactly from v1. V2 changes the runtime architecture, not the product math.
+- `id`
+- `jobId`
+- `filamentId`
+- `partName`
+- `weightGramsPerPart`
+- `quantity`
+- `createdAt`
+- `updatedAt`
 
-## Data Model
+Part rows reference saved filament records and contribute to the derived costing output.
 
-### Logical entities
+### Settings
 
-The minimum persisted entities for v2 are:
+Application-level settings are persisted separately from jobs and catalogs.
+
+The current settings model includes:
+
+- `defaultWasteFactorPercent`
+- `defaultMachineRatePerHourZar`
+
+These defaults are used for new jobs only.
+
+## Persistence Model
+
+### Persisted Entities
+
+The current persisted schema includes:
 
 - `filaments`
+- `customers`
 - `jobs`
 - `job_parts`
+- `app_meta`
+
+`app_meta` stores app-level settings and similar global values.
 
 ### Relationships
 
-- each `job_parts` row belongs to exactly one `jobs` row
-- each `job_parts` row references exactly one `filaments` row
+- each `job_parts` row belongs to one `jobs` row
+- each `job_parts` row may reference one `filaments` row
+- each `jobs` row may reference one `customers` row
+- deleting a customer clears the job’s `customerId` via database relationship behavior
+- deleting a filament clears the row’s `filamentId` via database relationship behavior
 
-### JSON/API shape examples
+### Source Of Truth
 
-#### Filament record
+The current platform uses SQLite as the only supported persistence layer.
 
-```json
-{
-  "id": "fil_001",
-  "name": "PLA Black Budget",
-  "materialType": "PLA",
-  "brand": "Generic",
-  "color": "Black",
-  "costPerKgZar": 289.99,
-  "notes": "",
-  "createdAt": "2026-06-18T10:00:00.000Z",
-  "updatedAt": "2026-06-18T10:00:00.000Z"
-}
-```
+This means:
 
-#### Job record
+- no JSON import/export support
+- no localStorage-based source of truth
+- no legacy v1 app-state import path
 
-```json
-{
-  "id": "job_001",
-  "jobName": "Bracket Batch",
-  "wasteFactorPercent": 12,
-  "printTimeHours": 6.5,
-  "machineRatePerHourZar": 45,
-  "parts": [
-    {
-      "id": "part_001",
-      "jobId": "job_001",
-      "partName": "Left Bracket",
-      "filamentId": "fil_001",
-      "weightGramsPerPart": 35,
-      "quantity": 4,
-      "createdAt": "2026-06-18T10:05:00.000Z",
-      "updatedAt": "2026-06-18T10:05:00.000Z"
-    }
-  ],
-  "createdAt": "2026-06-18T10:05:00.000Z",
-  "updatedAt": "2026-06-18T10:05:00.000Z"
-}
-```
+## Derived Calculation Output
 
-#### Export/import app-state shape
+Calculated results are not stored as authoritative persisted values. They are derived at runtime from saved job and catalog data.
 
-```json
-{
-  "version": 2,
-  "filaments": [],
-  "jobs": [],
-  "lastOpenJobId": null,
-  "exportedAt": "2026-06-18T12:00:00.000Z"
-}
-```
+Derived outputs include:
 
-### Units and conventions
+- base and adjusted material weight per row
+- material cost per row
+- allocated machine cost per row
+- line total cost
+- cost per part
+- total material cost
+- total machine cost
+- grand total
+- markup suggestions
+- profit values
+- margin percentages
 
-- filament pricing is stored as Rand per kilogram
-- part weight is stored as grams per part
-- quantity is stored as a whole number greater than zero
-- print time is normalized and stored as hours
-- waste is stored as a percentage value such as `12` for 12%
+This separation keeps persisted data small and keeps the costing engine authoritative for computed output.
 
 ## Calculation Rules
 
-The v2 implementation must preserve these formulas exactly.
+The current costing model is markup-based and uses shared calculation helpers in `shared/calculations`.
 
-### Material weight
+### Material And Weight
 
 For each part row:
 
 - `baseWeightGrams = weightGramsPerPart * quantity`
 - `adjustedWeightGrams = baseWeightGrams * (1 + wasteFactorPercent / 100)`
 
-### Filament cost
+### Material Cost
 
 For each part row:
 
 - `adjustedWeightKg = adjustedWeightGrams / 1000`
 - `materialCostZar = adjustedWeightKg * filament.costPerKgZar`
 
-### Machine cost
+### Machine Cost
 
 For the job:
 
 - `machineCostZar = printTimeHours * machineRatePerHourZar`
 
-### Machine cost allocation
+### Machine Cost Allocation
+
+Machine cost is allocated across part rows using adjusted material-weight share.
 
 For each part row:
 
 - `weightShare = adjustedWeightGrams / totalAdjustedWeightGrams`
 - `allocatedMachineCostZar = machineCostZar * weightShare`
 
-If the total adjusted weight is zero, the app must avoid division by zero and treat row machine allocations as zero until valid inputs exist.
-
-### Part row totals
+### Totals
 
 For each part row:
 
 - `lineTotalCostZar = materialCostZar + allocatedMachineCostZar`
 - `costPerPartZar = lineTotalCostZar / quantity`
 
-### Job totals
-
 For the job:
 
-- `totalMaterialCostZar = sum(materialCostZar for all rows)`
+- `totalMaterialCostZar = sum(materialCostZar)`
 - `totalMachineCostZar = machineCostZar`
 - `grandTotalCostZar = totalMaterialCostZar + totalMachineCostZar`
 
-### Selling-price suggestions
+### Selling Suggestions
 
-For markup values from 10 to 100 in increments of 10:
+Selling suggestions are generated at these markup levels:
 
-- `suggestedTotalPriceZar = grandTotalCostZar * (1 + markupPercent / 100)`
+- `10%` through `100%` in `10%` increments
+- `125%`, `150%`, `175%`, `200%`, `225%`, `250%`
 
-The results must show:
+Each suggestion row includes:
 
-- markup percentage
-- suggested total price
-- implied profit amount
+- `markupPercent`
+- `suggestedTotalPriceZar`
+- `profitZar`
+- `marginPercent`
 
-## Backend and API Architecture
+Markup remains the pricing input model. Margin is informational output only.
 
-The backend is the application boundary between the React UI and persistent data.
+## API Architecture
 
-### API resource groups
+The backend exposes a local API boundary between the React frontend and the SQLite-backed data layer.
 
-The v2 API should be organized around these resource groups:
+### Current Resource Groups
 
+- `/api/bootstrap`
+- `/api/settings`
 - `/api/filaments`
+- `/api/customers`
 - `/api/jobs`
-- `/api/app-state/export`
-- `/api/app-state/import`
-- optional `/api/migrations/import-v1`
+- `/api/job-images/*`
 
-### High-level API behavior
+### API Responsibilities
 
-#### Filaments
+#### `/api/bootstrap`
 
-The filament endpoints should support:
+Returns the startup payload required by the frontend, including:
 
-- list filaments
-- create filament
-- update filament
-- delete filament
-- fetch a single filament if needed by the frontend
+- settings
+- customers
+- filaments
+- jobs
+- active job
+- calculations for the active job when one exists
 
-#### Jobs
+#### `/api/settings`
 
-The job endpoints should support:
+Handles persisted global defaults for new jobs.
 
-- list jobs
-- create job
-- update job
-- delete job
-- fetch one job including its part rows
-- load the active or most recent job for resume behavior
+#### `/api/filaments`
 
-#### App-state export/import
+Handles filament CRUD operations.
 
-The export/import endpoints should support:
+#### `/api/customers`
 
-- exporting the app’s portable JSON state
-- importing a compatible JSON state file or payload
-- validating the payload shape before persistence
+Handles customer CRUD operations.
 
-#### Migration support
+#### `/api/jobs`
 
-Migration may be handled in one of two ways:
+Handles:
 
-- a dedicated endpoint such as `/api/migrations/import-v1`
-- a compatible import flow where the app-state importer accepts legacy v1 export shape and maps it to v2 storage
+- job creation
+- job retrieval
+- job updates
+- job deletion
+- active job loading
+- job image attach/replace/remove flows
 
-The implementation should document which approach is chosen, but the architecture allows either.
+#### `/api/job-images/*`
 
-### Response expectations
+Serves saved local image assets referenced by jobs.
 
-The API should return JSON responses with enough data for the frontend to render updated state without guessing. The docs do not require a rigid envelope format, but responses should be consistent across endpoints.
+## UI Architecture
 
-## Database Architecture
+The frontend is organized around a workflow-first layout rather than a generic admin dashboard.
 
-### Minimum schema
+### App Shell
 
-Document and implement at least these tables:
+The top-level UI includes:
 
-- `filaments`
-- `jobs`
-- `job_parts`
+- app header
+- new job action
+- settings access
+- main workspace
 
-### Schema intent
+### Main Workspace
 
-#### `filaments`
+The primary workspace focuses on:
 
-Stores reusable material pricing records.
+- active job editing
+- part-row management
+- results and pricing output
 
-#### `jobs`
+On larger screens, job editing and results remain visible together.
 
-Stores job-level settings such as name, waste factor, normalized hours, and machine rate.
+### Settings Drawer
 
-#### `job_parts`
+Settings are accessed through a right-side drawer that acts as a small internal menu.
 
-Stores each part row associated with a job and filament reference.
+The drawer currently has two sections:
 
-### Initialization and migrations
+- `Defaults`
+- `Catalog`
 
-The backend should initialize the SQLite schema if it does not exist.
+#### Defaults
 
-If schema evolution is introduced, a lightweight migration mechanism should be used so the local database remains upgradable between versions.
+Contains the global settings for:
 
-## Frontend Architecture
+- default Waste %
+- default Machine Rate / Hour
 
-The frontend is a React single-page application with a practical workflow-oriented UI.
+These defaults affect new jobs only.
 
-### Main screens or sections
+#### Catalog
 
-- app header and persistence actions
-- filament catalog management
-- active job editor
-- cost breakdown and pricing results
+Contains the reusable management views for:
 
-### Frontend responsibilities
+- Filaments
+- Customers
 
-- fetch and mutate data through the API
-- render dynamic part rows
-- provide form validation feedback
-- show calculation results returned from or aligned with the backend’s canonical math
-- support import/export actions
+Filament management is no longer part of the main job page.
 
-### State model
+### Job Editor
 
-The frontend should treat the backend as the source of truth for persisted records. Local component state is used for editing and interaction, but not as the final persistence authority.
+The job editor supports:
 
-## Shared Calculation Strategy
+- job name editing
+- job status changes
+- customer selection
+- waste and machine-rate editing
+- print-time hour/minute input
+- fulfillment flags
+- image upload, replace, preview, and removal
+- dynamic part rows
 
-The costing formulas must remain centralized so frontend and backend do not drift.
+Filament selection in part rows uses richer identity cues:
 
-Preferred approach:
+- primary label: filament name
+- secondary identity: brand and color
 
-- keep the canonical costing engine in a shared or backend-owned pure module
-- either return calculated results from the backend or reuse the same pure logic in both layers through shared code
+## Validation, Normalization, And Reliability Notes
 
-The important architectural rule is that there must be one authoritative implementation of the costing formulas.
+Shared helpers in `shared/calculations` centralize:
 
-## Proposed Project Structure
+- number coercion
+- time normalization
+- status normalization
+- validation of settings, filaments, customers, jobs, and parts
+- canonical costing calculations
+
+The frontend currently includes autosave orchestration and save-state feedback during job editing. That behavior is part of the live implementation, but this document describes it at a high level rather than as a detailed product contract.
+
+The main verification entrypoint is:
+
+- `npm run verify`
+
+At the root level, this runs:
+
+- backend verification
+- frontend production build
+
+## Project Structure
 
 ```text
 /
 |-- backend/
-|   |-- src/
-|   |   |-- server/
-|   |   |-- routes/
-|   |   |-- db/
-|   |   `-- services/
-|   `-- data/
-|       `-- app.db
-|-- frontend/
-|   |-- src/
-|   |   |-- components/
-|   |   |-- features/
-|   |   |-- services/
-|   |   `-- utils/
-|   `-- public/
-|-- shared/
-|   `-- calculations/
+|   |-- data/
+|   |-- scripts/
+|   `-- src/
+|       |-- db/
+|       |-- routes/
+|       |-- server/
+|       `-- services/
 |-- docs/
 |   |-- architecture.md
-|   `-- feature/
-|       |-- 001-initial-implementation.md
-|       `-- 002-v2-local-platform.md
+|   |-- feature/
+|   |-- prompts/
+|   `-- review/
+|-- frontend/
+|   `-- src/
+|       |-- components/
+|       |-- services/
+|       `-- utils/
+|-- shared/
+|   `-- calculations/
+`-- README.md
 ```
-
-This structure is intended to separate frontend, backend, persistence, and optional shared business logic cleanly without overcomplicating the local app.
-
-## Persistence Design
-
-SQLite is now the default and primary persistence layer.
-
-### Primary persistence
-
-- filament records are stored in SQLite
-- jobs are stored in SQLite
-- part rows are stored in SQLite
-- the active or most recent job can be restored from SQLite-backed state
-
-### Backup and interchange
-
-JSON export/import remains part of the system for:
-
-- backup
-- portability
-- migration
-- future interoperability with other tools
-
-### Source-of-truth rule
-
-`localStorage` is no longer the primary source of truth in v2. Any browser-side temporary storage is optional and must not replace the database-backed state.
-
-## Legacy V1 Migration
-
-V2 must support migration from the v1 export shape or equivalent local state.
-
-### Legacy source shape
-
-V1 data is expected to contain:
-
-- `version`
-- `filaments`
-- `jobs`
-- `lastOpenJobId`
-
-### Mapping rules
-
-- each v1 filament record maps directly into the `filaments` table
-- each v1 job maps into the `jobs` table
-- each job part entry inside a v1 job maps into a `job_parts` row with the job id attached
-- `lastOpenJobId` can be retained as app metadata or used only during import flow depending on implementation
-
-### Migration behavior
-
-The migration flow must:
-
-- validate legacy input
-- normalize missing fields where safe
-- preserve ids when possible
-- preserve timestamps when available
-- reject malformed payloads with clear errors
-
-## Validation And Formatting
-
-Validation rules from v1 still apply:
-
-- required filament selection on part rows
-- quantity must be at least 1
-- weight per part must be greater than 0
-- filament cost per kg must be greater than 0
-- machine rate must not be negative
-- waste factor must not be negative
-- time inputs must not be negative
-
-Formatting should still include:
-
-- currency shown in South African Rand
-- weights shown in grams
-- percentages displayed consistently
-- normalized handling of hours and minutes
 
 ## User Flow Summary
 
-1. The user opens the React frontend.
-2. The frontend loads filaments and the active or recent job from the local Express API.
-3. The backend reads persisted records from SQLite.
-4. The user updates filaments, job fields, and part rows in the UI.
-5. The frontend sends mutations to the backend API.
-6. The backend validates, persists, and calculates or coordinates canonical costing results.
-7. The frontend renders updated totals, row breakdowns, and selling-price suggestions.
-8. The user can export full app state as JSON or import legacy/current JSON back into the database-backed app.
+1. The frontend loads bootstrap data from the local backend.
+2. The backend reads settings, catalog data, jobs, and active-job context from SQLite.
+3. The user edits the active job in the React UI.
+4. The frontend persists job changes through the backend API.
+5. Shared calculation logic produces derived costing output.
+6. The frontend renders updated totals, results, and selling suggestions.
+7. Settings, catalog records, job metadata, and image references persist locally across restarts.
 
-## Assumptions And Constraints
+## Non-Functional Characteristics
 
-- v2 remains a single-user local-first application
-- React + Vite is the frontend stack
-- Express is the backend framework
-- `better-sqlite3` is the SQLite library
-- markup suggestions remain markup-based, not margin-based
-- machine cost is still distributed by adjusted material-weight share
-- part rows still select saved filament records as the default workflow
+### Local-First Operation
 
-## Non-Functional Considerations
+The app is intended to work on one machine without external services.
 
-### Durability
+### Single-User Simplicity
 
-The primary reason for v2 is stronger persistence through SQLite and cleaner application boundaries.
+There is no user account system or multi-user concurrency model in the current platform.
+
+### Durable Local Persistence
+
+SQLite provides durable structured storage, while the backend manages local image files.
 
 ### Maintainability
 
-The codebase should keep UI, API, persistence, and calculation logic clearly separated.
+The current architecture separates:
 
-### Local simplicity
+- UI behavior
+- API behavior
+- persistence
+- shared calculations and validation
 
-Even with a backend, the app should remain easy to run on one machine with minimal setup.
+## Current Boundaries
 
-### Responsiveness
+The platform currently does not aim to provide:
 
-The UI should remain desktop-first while still usable on smaller screens.
+- cloud sync
+- hosted SaaS deployment by default
+- authentication or roles
+- invoicing
+- tax/VAT workflows
+- stock control
+- labor or electricity costing
+- shipping logic
+- multiple images per job
 
-### Reliability
+## Documentation Status
 
-Import/export, schema initialization, and invalid input handling should fail clearly rather than silently.
+This document is the current architecture source of truth for the live platform.
 
-## Future Extensions
-
-The v2 local platform should support future evolution without a full rewrite.
-
-Possible future extensions:
-
-- desktop packaging such as Electron
-- multiple machine profiles
-- labor costing
-- electricity costing
-- packaging and shipping
-- printer depreciation
-- taxes and VAT support
-- saved quotes and customer records
-- PDF or printable quote output
-- optional remote sync or hosted mode
-- stock/inventory tracking
-
-## Implementation Notes
-
-This architecture is intended to guide the v2 rebuild. The next major implementation step is to scaffold the React frontend, Node/Express backend, SQLite schema initialization, and canonical calculation flow while preserving v1 costing behavior exactly.
+Feature docs in `docs/feature/` and implementation prompts in `docs/prompts/` remain useful as planning history, but they should not be treated as more current than this architecture document.

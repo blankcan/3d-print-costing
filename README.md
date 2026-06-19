@@ -1,25 +1,49 @@
 # 3D Print Costing
 
-Local-first 3D printer costing app for pricing print jobs in South African Rand.
+Local-first 3D print costing software for pricing print jobs in South African Rand.
 
 ## Overview
 
-This project is a full-stack local application for:
+This project is a single-user local application for:
 
-- managing reusable filament pricing
-- creating and editing print-costing jobs
-- calculating material, machine, and total job cost
-- generating selling-price suggestions from markup rules
-- exporting and importing app state as JSON
+- managing reusable filament records
+- managing reusable customer records
+- creating and updating saved print-costing jobs
+- attaching one primary image to a job
+- tracking job workflow status, payment, and delivery
+- calculating material, machine, and total costs
+- generating markup-based selling suggestions with profit and margin output
 
-The app is designed for single-user local use and keeps its primary data in SQLite.
+The app is designed to run locally on one machine. It does not require cloud sync, user accounts, or remote hosting for normal use.
 
-## Stack
+## Current Stack
 
 - Frontend: React + Vite
+- UI: Mantine
 - Backend: Node.js + Express
 - Persistence: SQLite via `better-sqlite3`
-- Shared logic: centralized calculation helpers in `shared/calculations`
+- Shared logic: calculation, normalization, and validation helpers in `shared/calculations`
+
+## Current Product Shape
+
+The current platform includes:
+
+- a main job-costing workspace
+- reusable filament and customer catalogs
+- global defaults for new jobs:
+  - Waste %
+  - Machine Rate / Hour
+- job status values:
+  - `PLANNING`
+  - `PRINTING`
+  - `COMPLETE`
+- fulfillment flags:
+  - `paid`
+  - `delivered`
+- optional customer assignment on jobs
+- one image per job
+- markup suggestions from `10%` to `250%`
+- suggestion output with suggested price, profit, and margin
 
 ## Repository Structure
 
@@ -46,7 +70,7 @@ Install dependencies from the repo root:
 npm install
 ```
 
-This root install also installs the backend and frontend packages through the root `postinstall` script.
+The root `postinstall` script installs both frontend and backend dependencies.
 
 Start the app in development mode:
 
@@ -61,7 +85,7 @@ Development URLs:
 
 ## Useful Scripts
 
-Run both frontend and backend:
+Run frontend and backend together:
 
 ```bash
 npm run dev
@@ -85,27 +109,51 @@ Build the frontend:
 npm run build
 ```
 
-Verify the current implementation:
+Run verification:
 
 ```bash
 npm run verify
 ```
 
-This runs the backend verification script and a frontend production build.
+This runs:
+
+- the backend verification script
+- a frontend production build
 
 ## Data And Persistence
 
-- App data is stored locally in SQLite under `backend/data/`
-- JSON export/import is supported through the app
-- Database files are ignored by Git
+- Structured app data is stored locally in SQLite under `backend/data/`
+- Primary job images are stored locally by the backend and referenced from the database
+- SQLite is the only supported source of truth
+- JSON import/export is not supported
 
-## Documentation
+## Architecture And Docs
 
-Project planning and feature specs live under `docs/`, including:
+Current documentation lives under `docs/`:
 
-- architecture notes
-- implementation feature specs
-- implementation prompts for follow-on agent work
+- `docs/architecture.md`
+- `docs/feature/`
+- `docs/prompts/`
+- `docs/review/`
+
+`docs/architecture.md` is the current architecture source of truth for the live app.
+
+The feature and prompt docs are mostly planning and implementation-history artifacts for follow-on work.
+
+## Product Boundaries
+
+The current app is:
+
+- local-first
+- single-user
+- offline-friendly within the limits of a local web app
+
+The current app does not provide:
+
+- cloud sync
+- auth
+- multi-user collaboration
+- remote hosting requirements for normal use
 
 ## Git Remote
 
