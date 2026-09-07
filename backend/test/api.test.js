@@ -56,6 +56,29 @@ function requestJson(baseUrl, route, options = {}) {
   });
 }
 
+function requestText(baseUrl, route) {
+  const url = new URL(route.replace(/^\//, ""), `${baseUrl}/`);
+
+  return new Promise((resolve, reject) => {
+    http
+      .get(url, (response) => {
+        let raw = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          raw += chunk;
+        });
+        response.on("end", () => {
+          resolve({
+            status: response.statusCode,
+            body: raw,
+            headers: response.headers
+          });
+        });
+      })
+      .on("error", reject);
+  });
+}
+
 async function withServer(run) {
   const temp = createTempDbPath();
   process.env.APP_DB_PATH = temp.dbPath;
@@ -164,4 +187,30 @@ test("invalid settings, filament, and job payloads return structured 400 respons
     assert.deepEqual(response.json.validation.rowErrors, {});
     assert.ok(response.json.validation.errors.includes("Print time minutes must be a whole number from 0 to 59."));
   });
+});
+
+test("production server serves the frontend shell and preserves API 404 responses", async () => {
+  const temp = createTempDbPath();
+  const frontendDirectory = path.join(temp.dir, "frontend");
+  fs.mkdirSync(frontendDirectory);
+  fs.writeFileSync(path.join(frontendDirectory, "index.html"), "<html><body>3D Print Costing</body></html>");
+  process.env.APP_DB_PATH = temp.dbPath;
+  const app = createApp({ frontendDirectory });
+  const server = app.listen(0);
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+
+  try {
+    const shellResponse = await requestText(baseUrl, "/jobs/example");
+    assert.equal(shellResponse.status, 200);
+    assert.equal(shellResponse.body, "<html><body>3D Print Costing</body></html>");
+    assert.equal(shellResponse.headers["x-content-type-options"], "nosniff");
+
+    const apiResponse = await requestJson(baseUrl, "/api/not-a-route");
+    assert.equal(apiResponse.status, 404);
+    assert.equal(apiResponse.json.error, "API route not found.");
+  } finally {
+    server.closeAllConnections?.();
+    await new Promise((resolve) => server.close(resolve));
+    cleanupTempDb(temp);
+  }
 });

@@ -76,6 +76,7 @@ Primary backend responsibilities:
 - expose the local HTTP API
 - persist application data in SQLite
 - serve stored job images
+- serve the built frontend in production
 - return bootstrap data for app startup
 - coordinate canonical calculation output using shared logic
 
@@ -444,7 +445,8 @@ At the root level, this runs:
 |       |-- routes/
 |       |-- server/
 |       `-- services/
-|-- docs/
+|-- deploy/
+|-- .ai/docs/
 |   |-- architecture.md
 |   |-- feature/
 |   |-- prompts/
@@ -474,6 +476,10 @@ At the root level, this runs:
 ### Local-First Operation
 
 The app is intended to work on one machine without external services.
+
+For LAN hosting, the production deployment runs the Node application as a loopback-only systemd service. The same Express process serves the built frontend and API, while Caddy is the LAN-facing reverse proxy and terminates internal TLS. SQLite and job images must live in a persistent data directory outside the deployed source tree.
+
+The production deployment configuration is maintained in `deploy/` and includes the systemd service, its environment-file example, a Caddy site block, and operational instructions. The backend health endpoint is available at `/api/health` for service checks.
 
 ### Single-User Simplicity
 
@@ -510,4 +516,4 @@ The platform currently does not aim to provide:
 
 This document is the current architecture source of truth for the live platform.
 
-Feature docs in `docs/feature/` and implementation prompts in `docs/prompts/` remain useful as planning history, but they should not be treated as more current than this architecture document.
+Feature docs in `.ai/docs/feature/` and implementation prompts in `.ai/docs/prompts/` remain useful as planning history, but they should not be treated as more current than this architecture document.

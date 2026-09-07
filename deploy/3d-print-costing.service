@@ -1,0 +1,24 @@
+[Unit]
+Description=3D Print Costing
+After=network.target
+
+[Service]
+Type=simple
+User=3dprintcosting
+Group=3dprintcosting
+WorkingDirectory=/opt/3d-print-costing
+EnvironmentFile=/etc/3d-print-costing/3d-print-costing.env
+ExecStart=/usr/bin/node backend/src/index.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+UMask=0077
+StateDirectory=3d-print-costing
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/3d-print-costing
+
+[Install]
+WantedBy=multi-user.target

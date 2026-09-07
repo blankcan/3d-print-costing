@@ -1,0 +1,10 @@
+3dcosting.lab.local {
+    # A .local hostname cannot use public ACME validation. Trust Caddy's local
+    # root certificate on each LAN client that will use this application.
+    tls internal
+    encode zstd gzip
+
+    # If Caddy runs in another LXC, replace this with the application's private
+    # LXC address and allow only the Caddy host through the firewall on port 3001.
+    reverse_proxy 127.0.0.1:3001
+}

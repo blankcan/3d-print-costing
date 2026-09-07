@@ -127,16 +127,20 @@ This runs:
 - SQLite is the only supported source of truth
 - JSON import/export is not supported
 
+## Production deployment
+
+For a LAN-only Proxmox LXC deployment behind Caddy at `3dcosting.lab.local`, use the checked-in [deployment guide](deploy/README.md). It runs the built frontend and API from one loopback-only Node service, keeps persistent data under `/var/lib/3d-print-costing`, and lets Caddy provide internal TLS.
+
 ## Architecture And Docs
 
-Current documentation lives under `docs/`:
+Current documentation lives under `.ai/docs/`:
 
-- `docs/architecture.md`
-- `docs/feature/`
-- `docs/prompts/`
-- `docs/review/`
+- `.ai/docs/architecture.md`
+- `.ai/docs/feature/`
+- `.ai/docs/prompts/`
+- `.ai/docs/review/`
 
-`docs/architecture.md` is the current architecture source of truth for the live app.
+`.ai/docs/architecture.md` is the current architecture source of truth for the live app.
 
 The feature and prompt docs are mostly planning and implementation-history artifacts for follow-on work.
 
